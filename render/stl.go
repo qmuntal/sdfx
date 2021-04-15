@@ -239,7 +239,7 @@ func RenderSTLSlowWriter(
 	s sdf.SDF3, //sdf3 to render
 	meshCells int, //number of cells on the longest axis. e.g 200
 	w io.Writer, //path to filename
-) {
+) error {
 	// work out the region we will sample
 	bb0 := s.BoundingBox()
 	bb0Size := bb0.Size()
@@ -251,10 +251,7 @@ func RenderSTLSlowWriter(
 
 	// run marching cubes to generate the triangle mesh
 	m := marchingCubes(s, bb, meshInc)
-	err := SaveSTLWriter(w, m)
-	if err != nil {
-		fmt.Printf("%s", err)
-	}
+	return SaveSTLWriter(w, m)
 }
 
 //-----------------------------------------------------------------------------
