@@ -11,6 +11,7 @@ package render
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
 	"fmt"
 	"os"
 	"sync"
@@ -43,6 +44,38 @@ func SaveSTL(path string, mesh []*Triangle3) error {
 	defer file.Close()
 
 	buf := bufio.NewWriter(file)
+	header := STLHeader{}
+	header.Count = uint32(len(mesh))
+	if err := binary.Write(buf, binary.LittleEndian, &header); err != nil {
+		return err
+	}
+
+	var d STLTriangle
+	for _, triangle := range mesh {
+		n := triangle.Normal()
+		d.Normal[0] = float32(n.X)
+		d.Normal[1] = float32(n.Y)
+		d.Normal[2] = float32(n.Z)
+		d.Vertex1[0] = float32(triangle.V[0].X)
+		d.Vertex1[1] = float32(triangle.V[0].Y)
+		d.Vertex1[2] = float32(triangle.V[0].Z)
+		d.Vertex2[0] = float32(triangle.V[1].X)
+		d.Vertex2[1] = float32(triangle.V[1].Y)
+		d.Vertex2[2] = float32(triangle.V[1].Z)
+		d.Vertex3[0] = float32(triangle.V[2].X)
+		d.Vertex3[1] = float32(triangle.V[2].Y)
+		d.Vertex3[2] = float32(triangle.V[2].Z)
+		if err := binary.Write(buf, binary.LittleEndian, &d); err != nil {
+			return err
+		}
+	}
+
+	return buf.Flush()
+}
+
+// SaveSTLWriter writes a triangle mesh to an STL buffer.
+func SaveSTLWriter(w io.Writer, mesh []*Triangle3) error {
+	buf := bufio.NewWriter(w)
 	header := STLHeader{}
 	header.Count = uint32(len(mesh))
 	if err := binary.Write(buf, binary.LittleEndian, &header); err != nil {
@@ -197,6 +230,28 @@ func RenderSTLSlow(
 	// run marching cubes to generate the triangle mesh
 	m := marchingCubes(s, bb, meshInc)
 	err := SaveSTL(path, m)
+	if err != nil {
+		fmt.Printf("%s", err)
+	}
+}
+
+func RenderSTLSlowWriter(
+	s sdf.SDF3, //sdf3 to render
+	meshCells int, //number of cells on the longest axis. e.g 200
+	w io.Writer, //path to filename
+) {
+	// work out the region we will sample
+	bb0 := s.BoundingBox()
+	bb0Size := bb0.Size()
+	meshInc := bb0Size.MaxComponent() / float64(meshCells)
+	bb1Size := bb0Size.DivScalar(meshInc)
+	bb1Size = bb1Size.Ceil().AddScalar(1)
+	bb1Size = bb1Size.MulScalar(meshInc)
+	bb := sdf.NewBox3(bb0.Center(), bb1Size)
+
+	// run marching cubes to generate the triangle mesh
+	m := marchingCubes(s, bb, meshInc)
+	err := SaveSTLWriter(w, m)
 	if err != nil {
 		fmt.Printf("%s", err)
 	}
